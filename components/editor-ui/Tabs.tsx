@@ -38,9 +38,14 @@ const FileIcon = ({ type }: { type: FileType }) => {
 const Tabs = ({ project, onFileSelect, onCloseTab }: TabsProps) => {
   const activeFileId = project.activeFile;
 
+  // Get only the files that are in the openTabs array
+  const openFiles = project.files.filter(file =>
+    project.openTabs.includes(file.id)
+  );
+
   return (
     <div className="flex items-center overflow-x-auto bg-muted/40 border-b">
-      {project.files.map((file) => (
+      {openFiles.map((file) => (
         <div
           key={file.id}
           onClick={() => onFileSelect(file.id)}

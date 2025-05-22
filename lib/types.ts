@@ -14,6 +14,7 @@ export interface Project {
   files: ProjectFile[];
   lastModified: number;
   activeFile?: string; // ID of the active file
+  openTabs: string[]; // IDs of files that are open in tabs
 }
 
 export const getFileTypeFromName = (filename: string): FileType => {
@@ -77,5 +78,6 @@ canvas {
 }`
     }
   ],
-  activeFile: 'sketch'
+  activeFile: 'sketch',
+  openTabs: ['sketch', 'index', 'style'] // Initially all files are open
 }; 

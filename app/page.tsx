@@ -7,6 +7,7 @@ import FileExplorer from '@/components/editor-ui/FileExplorer';
 import ProjectManager from '@/components/editor-ui/ProjectManager';
 import WebSocketListener from '@/components/editor-ui/WebSocketListener';
 import Tabs from '@/components/editor-ui/Tabs';
+import Console, { LogMessage } from '@/components/editor-ui/Console';
 import { Project, ProjectFile, DEFAULT_PROJECT } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Palette, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -15,6 +16,8 @@ export default function Home() {
   const [project, setProject] = useState<Project>(DEFAULT_PROJECT);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [enableWsListener, setEnableWsListener] = useState(false);
+  const [consoleMessages, setConsoleMessages] = useState<LogMessage[]>([]);
+  const [consoleHeight, setConsoleHeight] = useState(200); // Default height in pixels
 
   // Load project from localStorage on initial load
   useEffect(() => {
@@ -44,9 +47,15 @@ export default function Home() {
 
   // Handle file selection
   const handleFileSelect = (fileId: string) => {
+    // Add to open tabs if not already there
+    const updatedOpenTabs = project.openTabs.includes(fileId)
+      ? project.openTabs
+      : [...project.openTabs, fileId];
+
     setProject({
       ...project,
-      activeFile: fileId
+      activeFile: fileId,
+      openTabs: updatedOpenTabs
     });
   };
 
@@ -74,17 +83,18 @@ export default function Home() {
 
   // Handle closing a tab
   const handleCloseTab = (fileId: string) => {
-    const updatedFiles = project.files.filter(file => file.id !== fileId);
+    // Remove from open tabs
+    const updatedOpenTabs = project.openTabs.filter(id => id !== fileId);
 
     // If we're closing the active file, select another one
     let activeFile = project.activeFile;
     if (project.activeFile === fileId) {
-      activeFile = updatedFiles.length > 0 ? updatedFiles[0].id : undefined;
+      activeFile = updatedOpenTabs.length > 0 ? updatedOpenTabs[0] : undefined;
     }
 
     setProject({
       ...project,
-      files: updatedFiles,
+      openTabs: updatedOpenTabs,
       activeFile,
       lastModified: Date.now()
     });
@@ -110,6 +120,16 @@ export default function Home() {
       files: updatedFiles,
       lastModified: Date.now()
     });
+  };
+
+  // Handle console messages
+  const handleConsoleMessage = (message: LogMessage) => {
+    setConsoleMessages(prevMessages => [...prevMessages, message]);
+  };
+
+  // Clear console messages
+  const clearConsole = () => {
+    setConsoleMessages([]);
   };
 
   // Get active file
@@ -171,7 +191,7 @@ export default function Home() {
         {/* Main content */}
         <div className="flex-1 overflow-hidden">
           <div className="h-full flex flex-col md:flex-row mx-4">
-            {/* Editor Section */}
+            {/* Editor Section with Console */}
             <div className="flex-1 h-1/2 md:h-full flex flex-col">
               <Tabs
                 project={project}
@@ -180,11 +200,48 @@ export default function Home() {
               />
 
               {activeFile && (
-                <div className="flex-1 overflow-hidden">
-                  <Editor
-                    file={activeFile}
-                    onChange={handleFileChange}
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  {/* Editor with resizable height */}
+                  <div
+                    className="flex-1 overflow-hidden"
+                    style={{ height: `calc(100% - ${consoleHeight}px)` }}
+                  >
+                    <Editor
+                      file={activeFile}
+                      onChange={handleFileChange}
+                    />
+                  </div>
+
+                  {/* Resize handle */}
+                  <div
+                    className="h-1 bg-border hover:bg-primary/60 cursor-row-resize"
+                    onMouseDown={(e) => {
+                      const startY = e.clientY;
+                      const startHeight = consoleHeight;
+
+                      const handleMouseMove = (e: MouseEvent) => {
+                        const deltaY = startY - e.clientY;
+                        const newHeight = Math.max(50, Math.min(500, startHeight + deltaY));
+                        setConsoleHeight(newHeight);
+                      };
+
+                      const handleMouseUp = () => {
+                        document.removeEventListener('mousemove', handleMouseMove);
+                        document.removeEventListener('mouseup', handleMouseUp);
+                      };
+
+                      document.addEventListener('mousemove', handleMouseMove);
+                      document.addEventListener('mouseup', handleMouseUp);
+                    }}
                   />
+
+                  {/* Console */}
+                  <div style={{ height: `${consoleHeight}px` }}>
+                    <Console
+                      messages={consoleMessages}
+                      onClear={clearConsole}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -195,7 +252,10 @@ export default function Home() {
                 <h2 className="text-sm font-medium">Preview</h2>
               </div>
               <div className="flex-1 overflow-auto">
-                <Preview project={project} />
+                <Preview
+                  project={project}
+                  onConsoleMessage={handleConsoleMessage}
+                />
               </div>
             </div>
           </div>

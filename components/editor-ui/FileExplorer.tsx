@@ -99,6 +99,7 @@ const FileExplorer = ({ project, onProjectChange, onFileSelect }: FileExplorerPr
       ...project,
       files: [...project.files, newFile],
       activeFile: fileId,
+      openTabs: [...project.openTabs, fileId],
       lastModified: Date.now()
     });
 
@@ -109,14 +110,18 @@ const FileExplorer = ({ project, onProjectChange, onFileSelect }: FileExplorerPr
   const handleDeleteFile = (fileId: string) => {
     const updatedFiles = project.files.filter(file => file.id !== fileId);
 
+    // Remove from open tabs
+    const updatedOpenTabs = project.openTabs.filter(id => id !== fileId);
+
     let activeFile = project.activeFile;
     if (project.activeFile === fileId) {
-      activeFile = updatedFiles.length > 0 ? updatedFiles[0].id : undefined;
+      activeFile = updatedOpenTabs.length > 0 ? updatedOpenTabs[0] : undefined;
     }
 
     onProjectChange({
       ...project,
       files: updatedFiles,
+      openTabs: updatedOpenTabs,
       activeFile,
       lastModified: Date.now()
     });

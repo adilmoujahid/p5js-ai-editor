@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Project } from '@/lib/types';
+import { LogMessage } from './Console';
 
 interface PreviewProps {
   project: Project;
   height?: string;
   className?: string;
+  onConsoleMessage?: (message: LogMessage) => void;
 }
 
-const Preview = ({ project, height = '100%', className }: PreviewProps) => {
+const Preview = ({ project, height = '100%', className, onConsoleMessage }: PreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -80,6 +82,75 @@ const Preview = ({ project, height = '100%', className }: PreviewProps) => {
       `;
     }
 
+    // Add console interceptor script
+    const consoleInterceptor = `
+      <script>
+        (function() {
+          const originalConsole = {
+            log: console.log,
+            warn: console.warn,
+            error: console.error,
+            info: console.info
+          };
+
+          // Override console methods
+          console.log = function() {
+            const args = Array.from(arguments);
+            originalConsole.log.apply(console, args);
+            sendConsoleMessage('log', args);
+          };
+          
+          console.warn = function() {
+            const args = Array.from(arguments);
+            originalConsole.warn.apply(console, args);
+            sendConsoleMessage('warning', args);
+          };
+          
+          console.error = function() {
+            const args = Array.from(arguments);
+            originalConsole.error.apply(console, args);
+            sendConsoleMessage('error', args);
+          };
+          
+          console.info = function() {
+            const args = Array.from(arguments);
+            originalConsole.info.apply(console, args);
+            sendConsoleMessage('info', args);
+          };
+
+          // Send message to parent
+          function sendConsoleMessage(type, args) {
+            try {
+              const content = args.map(arg => {
+                if (typeof arg === 'object') {
+                  try {
+                    return JSON.stringify(arg);
+                  } catch (e) {
+                    return String(arg);
+                  }
+                }
+                return String(arg);
+              }).join(' ');
+              
+              window.parent.postMessage({
+                source: 'p5js-console',
+                type: type,
+                content: content,
+                timestamp: Date.now()
+              }, '*');
+            } catch (e) {
+              originalConsole.error('Error sending console message:', e);
+            }
+          }
+
+          // Capture global errors
+          window.addEventListener('error', function(event) {
+            sendConsoleMessage('error', [event.message + ' at ' + event.filename + ':' + event.lineno]);
+          });
+        })();
+      </script>
+    `;
+
     // Add p5.js library if not present
     if (!htmlContent.includes('p5.js') && !htmlContent.includes('p5.min.js')) {
       const headEndIndex = htmlContent.indexOf('</head>');
@@ -91,10 +162,38 @@ const Preview = ({ project, height = '100%', className }: PreviewProps) => {
       }
     }
 
+    // Insert console interceptor at the beginning of head
+    const headStartIndex = htmlContent.indexOf('<head>') + 6;
+    if (headStartIndex > 5) {
+      htmlContent =
+        htmlContent.slice(0, headStartIndex) +
+        consoleInterceptor +
+        htmlContent.slice(headStartIndex);
+    }
+
     // Use data URI to avoid cross-origin issues
     const dataUri = `data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`;
     iframeRef.current.src = dataUri;
   };
+
+  // Set up message listener for console messages
+  useEffect(() => {
+    if (!onConsoleMessage) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.source === 'p5js-console') {
+        onConsoleMessage({
+          id: `console-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          type: event.data.type,
+          content: event.data.content,
+          timestamp: event.data.timestamp
+        });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onConsoleMessage]);
 
   return (
     <div
