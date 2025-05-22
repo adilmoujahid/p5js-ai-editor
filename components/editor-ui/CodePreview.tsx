@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { createP5Frame } from '@/lib/template';
+import { cn } from '@/lib/utils';
 
 interface CodePreviewProps {
   code: string;
   height?: string;
+  className?: string;
 }
 
-const CodePreview = ({ code, height = '70vh' }: CodePreviewProps) => {
+const CodePreview = ({ code, height = '70vh', className }: CodePreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -27,11 +29,20 @@ const CodePreview = ({ code, height = '70vh' }: CodePreviewProps) => {
   };
 
   return (
-    <div className="w-full border border-border rounded-md overflow-hidden bg-white">
+    <div
+      className={cn(
+        "w-full h-full overflow-auto bg-white",
+        className
+      )}
+      style={{
+        overflowX: 'auto',
+        overflowY: 'auto'
+      }}
+    >
       <iframe
         ref={iframeRef}
-        className="w-full"
-        style={{ height }}
+        className="min-w-full min-h-full"
+        style={{ height, width: '100%' }}
         title="P5.js Preview"
         sandbox="allow-scripts"
       />

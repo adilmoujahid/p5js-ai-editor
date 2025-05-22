@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import { Download, Upload, Save, Trash2 } from 'lucide-react';
 
 interface Sketch {
   id: string;
@@ -97,19 +99,42 @@ const SketchManager = ({ currentCode, onLoadSketch }: SketchManagerProps) => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        <Input
-          type="text"
-          value={sketchName}
-          onChange={(e) => setSketchName(e.target.value)}
-          placeholder="Sketch name"
-        />
-        <Button onClick={handleSaveSketch}>Save</Button>
-        <Button variant="outline" onClick={handleDownloadSketch}>Download</Button>
+    <div className="space-y-4 w-full">
+      <Input
+        type="text"
+        value={sketchName}
+        onChange={(e) => setSketchName(e.target.value)}
+        placeholder="Sketch name"
+        className="h-9"
+      />
+
+      <div className="grid grid-cols-3 gap-2">
+        <Button
+          onClick={handleSaveSketch}
+          size="sm"
+          className="w-full"
+        >
+          <Save className="w-4 h-4 mr-1" />
+          Save
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleDownloadSketch}
+          size="sm"
+          className="w-full"
+        >
+          <Download className="w-4 h-4 mr-1" />
+          Down
+        </Button>
         <div className="relative">
-          <Button variant="outline" onClick={() => document.getElementById('file-upload')?.click()}>
-            Upload
+          <Button
+            variant="outline"
+            onClick={() => document.getElementById('file-upload')?.click()}
+            size="sm"
+            className="w-full"
+          >
+            <Upload className="w-4 h-4 mr-1" />
+            Up
           </Button>
           <input
             id="file-upload"
@@ -122,28 +147,28 @@ const SketchManager = ({ currentCode, onLoadSketch }: SketchManagerProps) => {
       </div>
 
       {sketches.length > 0 && (
-        <div className="border rounded-md overflow-hidden">
-          <h3 className="font-medium p-2 bg-muted">Saved Sketches</h3>
-          <div className="max-h-60 overflow-y-auto">
+        <div className="border rounded-md overflow-hidden bg-background mt-4">
+          <div className="bg-muted/50 p-2 text-sm font-medium border-b">Saved Sketches</div>
+          <div className="max-h-[calc(100vh-280px)] overflow-y-auto divide-y">
             {sketches.map((sketch) => (
               <div
                 key={sketch.id}
                 onClick={() => handleLoadSketch(sketch)}
-                className="flex items-center justify-between p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                className="flex items-center justify-between p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
               >
-                <div>
-                  <div className="font-medium">{sketch.name}</div>
+                <div className="overflow-hidden">
+                  <div className="font-medium text-sm truncate">{sketch.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {new Date(sketch.lastModified).toLocaleString()}
+                    {new Date(sketch.lastModified).toLocaleDateString()}
                   </div>
                 </div>
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon"
                   onClick={(e) => handleDeleteSketch(sketch.id, e)}
-                  className="opacity-50 hover:opacity-100"
+                  className="h-7 w-7 opacity-60 hover:opacity-100 hover:bg-destructive/10"
                 >
-                  Delete
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             ))}

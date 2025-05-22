@@ -1,5 +1,5 @@
 export const DEFAULT_P5_TEMPLATE = `function setup() {
-  createCanvas(400, 400);
+  createCanvas(800, 500);
   background(240);
 }
 
@@ -11,7 +11,7 @@ function draw() {
 }`;
 
 export const EMPTY_P5_TEMPLATE = `function setup() {
-  createCanvas(400, 400);
+  createCanvas(800, 500);
   background(240);
 }
 
@@ -29,10 +29,23 @@ export const createP5Frame = (code: string) => {
           html, body {
             margin: 0;
             padding: 0;
-            overflow: hidden;
+            background-color: #f0f0f0;
+            overflow: auto;
+          }
+          body {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 10px;
+            min-height: 100vh;
           }
           canvas {
             display: block;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+          }
+          /* For very large canvases */
+          .p5Canvas {
+            max-width: none !important;
           }
         </style>
       </head>

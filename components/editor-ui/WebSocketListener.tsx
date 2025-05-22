@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { cn } from '@/lib/utils';
 
 interface WebSocketListenerProps {
   onCodeUpdate: (code: string) => void;
@@ -52,20 +53,30 @@ const WebSocketListener = ({
   }, [serverUrl, onCodeUpdate]);
 
   return (
-    <div className="fixed bottom-4 right-4 text-xs">
-      {connected ? (
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-green-500">Connected to MCP server</span>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-          <span className="text-red-500">
-            {error ? error : "Disconnected from MCP server"}
-          </span>
-        </div>
-      )}
+    <div className="fixed bottom-4 right-4 z-50">
+      <div
+        className={cn(
+          "py-2 px-4 rounded-full shadow-md flex items-center gap-2 text-sm transition-all duration-200",
+          connected
+            ? "bg-green-500/10 text-green-600 border border-green-500/20"
+            : "bg-red-500/10 text-red-600 border border-red-500/20"
+        )}
+      >
+        <div
+          className={cn(
+            "w-2.5 h-2.5 rounded-full",
+            connected
+              ? "bg-green-500 animate-pulse"
+              : "bg-red-500"
+          )}
+        />
+        <span>
+          {connected
+            ? "Connected to MCP server"
+            : error ? error : "Disconnected from MCP server"
+          }
+        </span>
+      </div>
     </div>
   );
 };

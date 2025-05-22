@@ -1,67 +1,210 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import CodeEditor from '@/components/editor-ui/CodeEditor';
-import CodePreview from '@/components/editor-ui/CodePreview';
-import SketchManager from '@/components/editor-ui/SketchManager';
+import Editor from '@/components/editor-ui/Editor';
+import Preview from '@/components/editor-ui/Preview';
+import FileExplorer from '@/components/editor-ui/FileExplorer';
+import ProjectManager from '@/components/editor-ui/ProjectManager';
 import WebSocketListener from '@/components/editor-ui/WebSocketListener';
-import { DEFAULT_P5_TEMPLATE } from '@/lib/template';
+import Tabs from '@/components/editor-ui/Tabs';
+import { Project, ProjectFile, DEFAULT_PROJECT } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { Palette, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function Home() {
-  const [code, setCode] = useState(DEFAULT_P5_TEMPLATE);
+  const [project, setProject] = useState<Project>(DEFAULT_PROJECT);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [enableWsListener, setEnableWsListener] = useState(false);
 
-  // Handle code changes from the editor
-  const handleCodeChange = (value: string) => {
-    setCode(value);
+  // Load project from localStorage on initial load
+  useEffect(() => {
+    try {
+      const savedProject = localStorage.getItem('current_project');
+      if (savedProject) {
+        const parsed = JSON.parse(savedProject);
+        console.log('Loaded project from localStorage:', parsed);
+        setProject(parsed);
+      } else {
+        console.log('No saved project found, using default');
+      }
+    } catch (error) {
+      console.error('Error loading project from localStorage:', error);
+    }
+  }, []);
+
+  // Save current project to localStorage when it changes
+  useEffect(() => {
+    try {
+      console.log('Saving project to localStorage:', project);
+      localStorage.setItem('current_project', JSON.stringify(project));
+    } catch (error) {
+      console.error('Error saving project to localStorage:', error);
+    }
+  }, [project]);
+
+  // Handle file selection
+  const handleFileSelect = (fileId: string) => {
+    setProject({
+      ...project,
+      activeFile: fileId
+    });
   };
 
-  // Handle code updates from WebSocket
-  const handleCodeUpdate = (newCode: string) => {
-    setCode(newCode);
+  // Handle file content changes
+  const handleFileChange = (content: string) => {
+    if (!project.activeFile) return;
+
+    const updatedFiles = project.files.map(file => {
+      if (file.id === project.activeFile) {
+        return {
+          ...file,
+          content,
+          lastModified: Date.now()
+        };
+      }
+      return file;
+    });
+
+    setProject({
+      ...project,
+      files: updatedFiles,
+      lastModified: Date.now()
+    });
   };
+
+  // Handle closing a tab
+  const handleCloseTab = (fileId: string) => {
+    const updatedFiles = project.files.filter(file => file.id !== fileId);
+
+    // If we're closing the active file, select another one
+    let activeFile = project.activeFile;
+    if (project.activeFile === fileId) {
+      activeFile = updatedFiles.length > 0 ? updatedFiles[0].id : undefined;
+    }
+
+    setProject({
+      ...project,
+      files: updatedFiles,
+      activeFile,
+      lastModified: Date.now()
+    });
+  };
+
+  // Handle updates from WebSocket
+  const handleCodeUpdate = (code: string) => {
+    if (!project.activeFile) return;
+
+    const updatedFiles = project.files.map(file => {
+      if (file.id === project.activeFile) {
+        return {
+          ...file,
+          content: code,
+          lastModified: Date.now()
+        };
+      }
+      return file;
+    });
+
+    setProject({
+      ...project,
+      files: updatedFiles,
+      lastModified: Date.now()
+    });
+  };
+
+  // Get active file
+  const activeFile = project.activeFile
+    ? project.files.find(f => f.id === project.activeFile)
+    : null;
 
   return (
-    <main className="container mx-auto py-6 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">p5.js AI Editor</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setEnableWsListener(!enableWsListener)}
-          >
-            {enableWsListener ? 'Disable MCP Connection' : 'Enable MCP Connection'}
-          </Button>
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="border-b bg-card/40 px-4 py-3 sticky top-0 z-10">
+        <div className="mx-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center">
+            <Palette className="w-5 h-5 mr-2" />
+            <h1 className="text-xl font-bold">p5.js AI Editor</h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <ProjectManager
+              currentProject={project}
+              onProjectChange={setProject}
+            />
+
+            <Button
+              variant={enableWsListener ? "default" : "outline"}
+              onClick={() => setEnableWsListener(!enableWsListener)}
+              className="transition-all"
+              size="sm"
+            >
+              {enableWsListener ? 'Disable MCP' : 'Enable MCP'}
+            </Button>
+          </div>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <h2 className="text-xl font-medium">Code Editor</h2>
-          <CodeEditor
-            code={code}
-            onChange={handleCodeChange}
-          />
+      <div className="flex flex-1 overflow-hidden">
+        {/* File Explorer Sidebar */}
+        <div
+          className={`bg-card/20 border-r flex flex-col transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-0'
+            }`}
+        >
+          {sidebarOpen && (
+            <FileExplorer
+              project={project}
+              onProjectChange={setProject}
+              onFileSelect={handleFileSelect}
+            />
+          )}
         </div>
 
-        <div className="space-y-4">
-          <h2 className="text-xl font-medium">Live Preview</h2>
-          <CodePreview code={code} />
-        </div>
-      </div>
+        {/* Toggle sidebar button */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-primary text-primary-foreground p-1.5 rounded-r-md shadow-md z-20"
+          style={{ marginLeft: sidebarOpen ? '16rem' : '4px' }}
+        >
+          {sidebarOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        </button>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-medium">Sketch Manager</h2>
-        <SketchManager
-          currentCode={code}
-          onLoadSketch={handleCodeChange}
-        />
+        {/* Main content */}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full flex flex-col md:flex-row mx-4">
+            {/* Editor Section */}
+            <div className="flex-1 h-1/2 md:h-full flex flex-col">
+              <Tabs
+                project={project}
+                onFileSelect={handleFileSelect}
+                onCloseTab={handleCloseTab}
+              />
+
+              {activeFile && (
+                <div className="flex-1 overflow-hidden">
+                  <Editor
+                    file={activeFile}
+                    onChange={handleFileChange}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Preview Section */}
+            <div className="w-full h-1/2 md:h-full md:w-1/2 border-t md:border-t-0 md:border-l flex flex-col">
+              <div className="bg-muted/40 py-2 px-3 border-b">
+                <h2 className="text-sm font-medium">Preview</h2>
+              </div>
+              <div className="flex-1 overflow-auto">
+                <Preview project={project} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {enableWsListener && (
         <WebSocketListener onCodeUpdate={handleCodeUpdate} />
       )}
-    </main>
+    </div>
   );
 }
