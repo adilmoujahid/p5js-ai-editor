@@ -110,15 +110,11 @@ const ProjectDashboard = ({ onProjectSelect }: ProjectDashboardProps) => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card/40 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-center">
+          <div className="ml-8">
             <h1 className="text-3xl font-bold">p5.js AI Editor</h1>
             <p className="text-muted-foreground mt-1">Create and manage your p5.js projects</p>
           </div>
-          <Button onClick={handleCreateProject} size="lg">
-            <PlusCircle className="h-5 w-5 mr-2" />
-            New Project
-          </Button>
         </div>
       </header>
 
