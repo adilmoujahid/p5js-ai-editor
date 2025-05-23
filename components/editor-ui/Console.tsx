@@ -26,18 +26,18 @@ const Console = ({ messages, onClear, className }: ConsoleProps) => {
   }, [messages]);
 
   return (
-    <div className={cn("flex flex-col h-full bg-card/10", className)}>
-      <div className="flex justify-between items-center p-2 border-b bg-muted/40">
+    <div className={cn("flex flex-col h-full bg-card/10 min-w-0", className)}>
+      <div className="flex justify-between items-center p-2 border-b bg-muted/40 shrink-0">
         <h3 className="text-sm font-medium">Console</h3>
         <button
           onClick={onClear}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="text-xs text-muted-foreground hover:text-foreground shrink-0"
         >
           Clear
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto text-sm font-mono p-1">
+      <div className="flex-1 overflow-auto text-sm font-mono p-1 min-w-0">
         {messages.length === 0 ? (
           <div className="text-muted-foreground italic p-2 text-xs">No console output</div>
         ) : (
@@ -45,7 +45,7 @@ const Console = ({ messages, onClear, className }: ConsoleProps) => {
             <div
               key={msg.id}
               className={cn(
-                "px-2 py-1 border-b border-muted flex items-start gap-2",
+                "px-2 py-1 border-b border-muted flex items-start gap-2 min-w-0",
                 msg.type === 'error' && "text-red-500 bg-red-500/5",
                 msg.type === 'warning' && "text-amber-500 bg-amber-500/5",
                 msg.type === 'info' && "text-blue-500 bg-blue-500/5",
@@ -54,9 +54,11 @@ const Console = ({ messages, onClear, className }: ConsoleProps) => {
               {msg.type === 'error' && <XCircle className="w-4 h-4 mt-0.5 shrink-0" />}
               {msg.type === 'warning' && <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
               {msg.type === 'info' && <Info className="w-4 h-4 mt-0.5 shrink-0" />}
-              <pre className="whitespace-pre-wrap break-words">
-                {msg.content}
-              </pre>
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <pre className="whitespace-pre-wrap break-words break-all text-xs leading-relaxed overflow-wrap-anywhere">
+                  {msg.content}
+                </pre>
+              </div>
             </div>
           ))
         )}

@@ -202,10 +202,10 @@ export default function Home() {
         </button>
 
         {/* Main content */}
-        <div className="flex-1 overflow-hidden">
-          <div className="h-full flex flex-col md:flex-row mx-4">
+        <div className="flex-1 overflow-hidden min-w-0">
+          <div className="h-full flex flex-col md:flex-row mx-4 min-w-0">
             {/* Editor Section with Console */}
-            <div className="flex-1 h-1/2 md:h-full flex flex-col">
+            <div className="flex-1 h-1/2 md:h-full flex flex-col min-w-0">
               <Tabs
                 project={project}
                 onFileSelect={handleFileSelect}
@@ -216,10 +216,10 @@ export default function Home() {
               />
 
               {activeFile && (
-                <div className="flex-1 overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-hidden flex flex-col min-w-0">
                   {/* Editor with resizable height */}
                   <div
-                    className="flex-1 overflow-hidden"
+                    className="flex-1 overflow-hidden min-w-0"
                     style={{ height: `calc(100% - ${consoleHeight}px)` }}
                   >
                     <Editor
@@ -230,7 +230,7 @@ export default function Home() {
 
                   {/* Resize handle */}
                   <div
-                    className="h-1 bg-border hover:bg-primary/60 cursor-row-resize"
+                    className="h-1 bg-border hover:bg-primary/60 cursor-row-resize shrink-0"
                     onMouseDown={(e) => {
                       const startY = e.clientY;
                       const startHeight = consoleHeight;
@@ -252,7 +252,7 @@ export default function Home() {
                   />
 
                   {/* Console */}
-                  <div style={{ height: `${consoleHeight}px` }}>
+                  <div style={{ height: `${consoleHeight}px` }} className="min-w-0 overflow-hidden">
                     <Console
                       messages={consoleMessages}
                       onClear={clearConsole}
@@ -263,11 +263,11 @@ export default function Home() {
             </div>
 
             {/* Preview Section */}
-            <div className="w-full h-1/2 md:h-full md:w-1/2 border-t md:border-t-0 md:border-l flex flex-col">
-              <div className="bg-muted/40 py-2 px-3 border-b">
+            <div className="w-full h-1/2 md:h-full md:w-1/2 border-t md:border-t-0 md:border-l flex flex-col min-w-0">
+              <div className="bg-muted/40 py-2 px-3 border-b shrink-0">
                 <h2 className="text-sm font-medium">Preview</h2>
               </div>
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-auto min-w-0">
                 <Preview
                   project={project}
                   onConsoleMessage={handleConsoleMessage}
