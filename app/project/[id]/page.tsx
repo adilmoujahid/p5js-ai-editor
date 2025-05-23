@@ -171,6 +171,133 @@ export default function ProjectPage() {
     });
   };
 
+  // WebSocket execution control handler
+  const handleExecutionControl = (action: 'start' | 'stop' | 'toggle') => {
+    switch (action) {
+      case 'start':
+        handleStart();
+        break;
+      case 'stop':
+        handleStop();
+        break;
+      case 'toggle':
+        if (isRunning) {
+          handleStop();
+        } else {
+          handleStart();
+        }
+        break;
+    }
+  };
+
+  // WebSocket console control handler
+  const handleConsoleControl = (action: 'clear' | 'message' | 'height', data?: any) => {
+    switch (action) {
+      case 'clear':
+        clearConsole();
+        break;
+      case 'message':
+        if (data) {
+          handleConsoleMessage(data);
+        }
+        break;
+      case 'height':
+        if (typeof data === 'number') {
+          setConsoleHeight(Math.max(50, Math.min(500, data)));
+        }
+        break;
+    }
+  };
+
+  // WebSocket file control handler
+  const handleFileControl = (action: 'select' | 'close' | 'create' | 'delete', data?: any) => {
+    if (!project) return;
+
+    switch (action) {
+      case 'select':
+        if (typeof data === 'string') {
+          const fileExists = project.files.find(f => f.id === data);
+          if (fileExists) {
+            handleFileSelect(data);
+          }
+        }
+        break;
+      case 'close':
+        if (typeof data === 'string') {
+          handleCloseTab(data);
+        }
+        break;
+      case 'create':
+        if (data && data.name && data.content) {
+          const newFile = {
+            id: data.name,
+            name: data.name,
+            type: 'js' as const,
+            content: data.content,
+            lastModified: Date.now()
+          };
+
+          const updatedFiles = [...project.files, newFile];
+          const updatedOpenTabs = [...project.openTabs, newFile.id];
+
+          setProject({
+            ...project,
+            files: updatedFiles,
+            openTabs: updatedOpenTabs,
+            activeFile: newFile.id,
+            lastModified: Date.now()
+          });
+        }
+        break;
+      case 'delete':
+        if (typeof data === 'string') {
+          const updatedFiles = project.files.filter(f => f.id !== data);
+          const updatedOpenTabs = project.openTabs.filter(id => id !== data);
+
+          let activeFile = project.activeFile;
+          if (project.activeFile === data) {
+            activeFile = updatedOpenTabs.length > 0 ? updatedOpenTabs[0] : undefined;
+          }
+
+          setProject({
+            ...project,
+            files: updatedFiles,
+            openTabs: updatedOpenTabs,
+            activeFile,
+            lastModified: Date.now()
+          });
+        }
+        break;
+    }
+  };
+
+  // WebSocket layout control handler
+  const handleLayoutControl = (action: 'sidebar' | 'projectName', data?: any) => {
+    switch (action) {
+      case 'sidebar':
+        setSidebarOpen(!sidebarOpen);
+        break;
+      case 'projectName':
+        if (typeof data === 'string' && project) {
+          setProject({
+            ...project,
+            name: data,
+            lastModified: Date.now()
+          });
+        }
+        break;
+    }
+  };
+
+  // WebSocket navigation control handler
+  const handleNavigationControl = (action: 'dashboard') => {
+    switch (action) {
+      case 'dashboard':
+        handleBackToDashboard();
+        break;
+    }
+  };
+
   // Handle console messages
   const handleConsoleMessage = (message: LogMessage) => {
     setConsoleMessages(prevMessages => [...prevMessages, message]);
@@ -355,7 +482,14 @@ export default function ProjectPage() {
       </div>
 
       {enableWsListener && (
-        <WebSocketListener onCodeUpdate={handleCodeUpdate} />
+        <WebSocketListener
+          onCodeUpdate={handleCodeUpdate}
+          onExecutionControl={handleExecutionControl}
+          onConsoleControl={handleConsoleControl}
+          onFileControl={handleFileControl}
+          onLayoutControl={handleLayoutControl}
+          onNavigationControl={handleNavigationControl}
+        />
       )}
     </div>
   );
