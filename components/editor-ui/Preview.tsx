@@ -8,19 +8,23 @@ interface PreviewProps {
   height?: string;
   className?: string;
   onConsoleMessage?: (message: LogMessage) => void;
+  isRunning?: boolean;
 }
 
-const Preview = ({ project, height = '100%', className, onConsoleMessage }: PreviewProps) => {
+const Preview = ({ project, height = '100%', className, onConsoleMessage, isRunning = true }: PreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    if (iframeRef.current) {
+    if (iframeRef.current && isRunning) {
       updateIframe();
+    } else if (iframeRef.current && !isRunning) {
+      // Clear the iframe when stopped
+      iframeRef.current.src = 'about:blank';
     }
-  }, [project]);
+  }, [project, isRunning]);
 
   const updateIframe = () => {
-    if (!iframeRef.current) return;
+    if (!iframeRef.current || !isRunning) return;
 
     // Get HTML file
     const htmlFile = project.files.find(file => file.name === 'index.html');
@@ -194,6 +198,23 @@ const Preview = ({ project, height = '100%', className, onConsoleMessage }: Prev
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [onConsoleMessage]);
+
+  if (!isRunning) {
+    return (
+      <div
+        className={cn(
+          "w-full h-full overflow-auto bg-white flex items-center justify-center",
+          className
+        )}
+      >
+        <div className="text-center text-muted-foreground">
+          <div className="text-lg mb-2">⏸️</div>
+          <div className="text-sm">Code execution stopped</div>
+          <div className="text-xs mt-1">Click Start to run your sketch</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

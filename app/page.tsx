@@ -18,6 +18,7 @@ export default function Home() {
   const [enableWsListener, setEnableWsListener] = useState(false);
   const [consoleMessages, setConsoleMessages] = useState<LogMessage[]>([]);
   const [consoleHeight, setConsoleHeight] = useState(200); // Default height in pixels
+  const [isRunning, setIsRunning] = useState(true); // Code execution state
 
   // Load project from localStorage on initial load
   useEffect(() => {
@@ -132,6 +133,18 @@ export default function Home() {
     setConsoleMessages([]);
   };
 
+  // Handle start execution
+  const handleStart = () => {
+    setIsRunning(true);
+    // Clear console when starting fresh
+    clearConsole();
+  };
+
+  // Handle stop execution
+  const handleStop = () => {
+    setIsRunning(false);
+  };
+
   // Get active file
   const activeFile = project.activeFile
     ? project.files.find(f => f.id === project.activeFile)
@@ -197,6 +210,9 @@ export default function Home() {
                 project={project}
                 onFileSelect={handleFileSelect}
                 onCloseTab={handleCloseTab}
+                isRunning={isRunning}
+                onStart={handleStart}
+                onStop={handleStop}
               />
 
               {activeFile && (
@@ -255,6 +271,7 @@ export default function Home() {
                 <Preview
                   project={project}
                   onConsoleMessage={handleConsoleMessage}
+                  isRunning={isRunning}
                 />
               </div>
             </div>
