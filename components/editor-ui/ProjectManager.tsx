@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Project, DEFAULT_PROJECT } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Save, FolderOpen, PlusCircle } from 'lucide-react';
+import { Save, FolderOpen, PlusCircle, Home } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface ProjectManagerProps {
   currentProject: Project;
@@ -10,6 +11,7 @@ interface ProjectManagerProps {
 
 const ProjectManager = ({ currentProject, onProjectChange }: ProjectManagerProps) => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const router = useRouter();
 
   // Load projects from localStorage on component mount
   useEffect(() => {
@@ -42,6 +44,9 @@ const ProjectManager = ({ currentProject, onProjectChange }: ProjectManagerProps
       // Add new project
       setProjects([...projects, updatedProject]);
     }
+
+    // Update the current project as well
+    onProjectChange(updatedProject);
   };
 
   const handleNewProject = () => {
@@ -52,11 +57,30 @@ const ProjectManager = ({ currentProject, onProjectChange }: ProjectManagerProps
       name: `Untitled Project ${projects.length + 1}`,
       lastModified: Date.now()
     };
-    onProjectChange(newProject);
+
+    // Save to projects list
+    const updatedProjects = [...projects, newProject];
+    setProjects(updatedProjects);
+
+    // Navigate to the new project
+    router.push(`/project/${newProject.id}`);
+  };
+
+  const handleGoToDashboard = () => {
+    router.push('/');
   };
 
   return (
     <div className="flex items-center gap-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleGoToDashboard}
+        title="Go to dashboard"
+      >
+        <Home className="h-4 w-4 mr-1" />
+        Dashboard
+      </Button>
       <Button
         variant="ghost"
         size="sm"
