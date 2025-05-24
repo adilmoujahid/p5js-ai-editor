@@ -1,82 +1,79 @@
 #!/usr/bin/env python3
 """
-p5.js MCP Server
-
-A Model Context Protocol server for p5.js development, providing tools and resources
-for creative coding assistance, project management, and p5.js-specific functionality.
+MCP Server for p5.js AI Editor
+This implements pattern #2 from the MCP documentation:
+- MCP server runs for Claude Desktop (stdio)
+- Socket.IO server (aiohttp) acts as a bridge to the webapp
 """
 
-import json
-import os
-from typing import Dict, List, Any
-from pathlib import Path
-
+import asyncio
+import threading
+import logging
+from typing import Set, Dict, Any, Optional
+import socketio
+from aiohttp import web
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel
 
-# Create the MCP server
-mcp = FastMCP("p5js-ai-editor")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# Initialize MCP server for Claude Desktop
+mcp = FastMCP(name="p5js-controller")
 
-class P5JSProjectFile(BaseModel):
-    """Represents a p5.js project file"""
-    name: str
-    content: str
-    type: str = "js"
+# Socket.IO server for webapp connections
+sio = socketio.AsyncServer(
+    cors_allowed_origins="http://localhost:3000",
+    logger=False,
+    engineio_logger=False
+)
 
+# Create aiohttp web application
+app = web.Application()
+sio.attach(app)
 
-class P5JSProject(BaseModel):
-    """Represents a p5.js project"""
-    id: str
-    name: str
-    files: List[P5JSProjectFile]
-    description: str = ""
+# Global state for connections - shared across threads
+connected_clients: Set[str] = set()
+bridge_server_running = False
+runner: Optional[web.AppRunner] = None
+connection_lock = threading.Lock()
 
-
-# Sample p5.js code templates
-P5JS_TEMPLATES = {
-    "basic": """function setup() {
-  createCanvas(400, 400);
+# Sample p5.js code snippets
+SAMPLE_CODES = {
+    'basic_drawing': '''function setup() {
+  createCanvas(800, 600);
+  background(220);
 }
 
 function draw() {
-  background(220);
   fill(255, 0, 0);
   ellipse(mouseX, mouseY, 50, 50);
-}""",
-    
-    "animation": """let angle = 0;
+}''',
 
-function setup() {
+    'animated_background': '''function setup() {
   createCanvas(400, 400);
   colorMode(HSB);
 }
 
 function draw() {
-  background(220);
+  background(frameCount % 360, 80, 90);
   
-  translate(width/2, height/2);
-  rotate(angle);
-  
-  fill(angle % 360, 80, 90);
-  rectMode(CENTER);
-  rect(0, 0, 100, 100);
-  
-  angle += 0.02;
-}""",
-    
-    "interactive": """let particles = [];
+  for (let i = 0; i < 10; i++) {
+    fill(i * 36, 100, 100);
+    rect(i * 40, height/2, 30, 100);
+  }
+}''',
+
+    'interactive_particles': '''let particles = [];
 
 function setup() {
   createCanvas(800, 600);
-  
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 100; i++) {
     particles.push({
       x: random(width),
       y: random(height),
       vx: random(-2, 2),
-      vy: random(-2, 2),
-      size: random(5, 15)
+      vy: random(-2, 2)
     });
   }
 }
@@ -91,363 +88,494 @@ function draw() {
     if (p.x < 0 || p.x > width) p.vx *= -1;
     if (p.y < 0 || p.y > height) p.vy *= -1;
     
-    fill(255, 100);
-    noStroke();
-    ellipse(p.x, p.y, p.size);
+    fill(255);
+    circle(p.x, p.y, 5);
   }
-}
+}''',
 
-function mousePressed() {
-  particles.push({
-    x: mouseX,
-    y: mouseY,
-    vx: random(-3, 3),
-    vy: random(-3, 3),
-    size: random(10, 20)
-  });
-}""",
-    
-    "3d": """function setup() {
+    'rotating_cube': '''function setup() {
   createCanvas(600, 600, WEBGL);
 }
 
 function draw() {
   background(50);
   
-  lights();
-  
   rotateX(frameCount * 0.01);
-  rotateY(frameCount * 0.005);
+  rotateY(frameCount * 0.01);
   
   fill(255, 100, 100);
   box(200);
-  
-  translate(250, 0, 0);
-  fill(100, 255, 100);
-  sphere(80);
-}""",
-    
-    "sound": """let mic;
-let vol = 0;
+}''',
 
-function setup() {
-  createCanvas(400, 400);
-  
-  // Create an audio input
-  mic = new p5.AudioIn();
-  mic.start();
+    'generative_art': '''function setup() {
+  createCanvas(800, 800);
+  background(0);
+  noLoop();
 }
 
 function draw() {
-  background(220);
-  
-  // Get the overall volume (between 0 and 1.0)
-  vol = mic.getLevel();
-  
-  // Map volume to circle size
-  let circleSize = map(vol, 0, 1, 50, 400);
-  
-  fill(255, 0, 0, 100);
-  noStroke();
-  ellipse(width/2, height/2, circleSize, circleSize);
-  
-  // Display volume level
-  fill(0);
-  textAlign(CENTER);
-  text('Volume: ' + vol.toFixed(2), width/2, 50);
-}""",
-    
-    "generative": """function setup() {
-  createCanvas(800, 800);
-  background(255);
-  noLoop();
-  
-  generateArt();
-}
-
-function generateArt() {
   for (let i = 0; i < 1000; i++) {
     let x = random(width);
     let y = random(height);
     let size = random(2, 20);
     
-    // Use noise for organic randomness
-    let noiseScale = 0.01;
-    let alpha = noise(x * noiseScale, y * noiseScale) * 255;
-    
-    fill(random(255), random(255), random(255), alpha);
+    fill(random(255), random(255), random(255), 150);
     noStroke();
     ellipse(x, y, size, size);
   }
+}'''
 }
 
-function mousePressed() {
-  background(255);
-  generateArt();
-}"""
-}
+# Socket.IO event handlers
+@sio.event
+async def connect(sid, environ):
+    """Handle client connections from webapp"""
+    with connection_lock:
+        connected_clients.add(sid)
+    logger.info(f"✅ Webapp client connected: {sid} (Total: {len(connected_clients)})")
 
-# p5.js function documentation
-P5JS_FUNCTIONS = {
-    "createCanvas": {
-        "description": "Creates a canvas element and adds it to the DOM",
-        "syntax": "createCanvas(width, height, [renderer])",
-        "example": "createCanvas(400, 400); // Creates a 400x400 pixel canvas"
-    },
-    "background": {
-        "description": "Sets the background color of the canvas",
-        "syntax": "background(color) or background(r, g, b, [a])",
-        "example": "background(220); // Light gray background"
-    },
-    "fill": {
-        "description": "Sets the color used to fill shapes",
-        "syntax": "fill(color) or fill(r, g, b, [a])",
-        "example": "fill(255, 0, 0); // Red fill"
-    },
-    "ellipse": {
-        "description": "Draws an ellipse (oval) to the screen",
-        "syntax": "ellipse(x, y, width, [height])",
-        "example": "ellipse(50, 50, 80, 80); // Circle at (50,50) with diameter 80"
-    },
-    "rect": {
-        "description": "Draws a rectangle to the screen",
-        "syntax": "rect(x, y, width, height, [tl], [tr], [br], [bl])",
-        "example": "rect(30, 20, 55, 55); // Rectangle at (30,20) with size 55x55"
-    }
-}
+@sio.event
+async def disconnect(sid):
+    """Handle client disconnections"""
+    with connection_lock:
+        connected_clients.discard(sid)
+    logger.info(f"❌ Webapp client disconnected: {sid} (Remaining: {len(connected_clients)})")
 
+@sio.event
+async def projectState(sid, data):
+    """Handle project state from webapp"""
+    logger.info(f'📥 Received project state from {sid}: {data.get("projectName", "Unknown")} ({len(data.get("files", []))} files)')
 
+@sio.event
+async def getProjectState(sid):
+    """Handle request for project state"""
+    logger.info(f'📝 Client {sid} requesting project state...')
+
+def get_connected_count():
+    """Thread-safe way to get connected client count"""
+    try:
+        # Query the Socket.IO server directly instead of relying on global variable
+        if sio and hasattr(sio, 'manager'):
+            # Get the actual connected clients from Socket.IO manager
+            manager = sio.manager
+            if hasattr(manager, 'eio') and hasattr(manager.eio, 'sockets'):
+                return len(manager.eio.sockets)
+            elif hasattr(manager, 'rooms'):
+                # Count unique session IDs across all rooms
+                all_sids = set()
+                for room_sids in manager.rooms.values():
+                    all_sids.update(room_sids)
+                return len(all_sids)
+        
+        # Fallback to our global variable with lock
+        with connection_lock:
+            return len(connected_clients)
+    except Exception as e:
+        logger.error(f"Error getting connected count: {e}")
+        # Fallback to our global variable with lock
+        with connection_lock:
+            return len(connected_clients)
+
+async def send_to_webapp(event: str, data: Any = None):
+    """Send Socket.IO event to all connected webapp clients"""
+    client_count = get_connected_count()
+    if client_count == 0:
+        raise ConnectionError("No webapp clients connected. Make sure the webapp is running and MCP is enabled.")
+    
+    # Send to all connected clients
+    if data is not None:
+        await sio.emit(event, data)
+    else:
+        await sio.emit(event)
+    
+    logger.info(f'📤 Sent {event} to {client_count} webapp client(s)')
+
+# MCP Tools (called by Claude Desktop)
 @mcp.tool()
-def generate_p5js_code(template: str = "basic", custom_description: str = "") -> str:
+async def send_code_to_editor(code: str) -> str:
     """
-    Generate p5.js code based on templates or custom descriptions.
+    Send p5.js code to the web editor for execution
     
     Args:
-        template: Choose from 'basic', 'animation', 'interactive', '3d', 'sound', 'generative'
-        custom_description: Optional description for custom code generation
+        code: The p5.js code to send to the editor
     
     Returns:
-        Generated p5.js code
+        Status message indicating success or failure
     """
-    if template in P5JS_TEMPLATES:
-        code = P5JS_TEMPLATES[template]
-        if custom_description:
-            code = f"// {custom_description}\n\n{code}"
-        return code
+    try:
+        await send_to_webapp('codeUpdate', {'code': code})
+        return f"✅ Successfully sent code to p5.js editor ({len(code)} characters)"
+    except ConnectionError as e:
+        error_msg = f"❌ Connection error: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+    except Exception as e:
+        error_msg = f"❌ Failed to send code: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+@mcp.tool()
+async def start_code_execution() -> str:
+    """Start executing the code in the p5.js editor"""
+    try:
+        await send_to_webapp('startExecution')
+        return "✅ Code execution started"
+    except Exception as e:
+        error_msg = f"❌ Failed to start execution: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+@mcp.tool()
+async def stop_code_execution() -> str:
+    """Stop executing the code in the p5.js editor"""
+    try:
+        await send_to_webapp('stopExecution')
+        return "✅ Code execution stopped"
+    except Exception as e:
+        error_msg = f"❌ Failed to stop execution: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+@mcp.tool()
+async def clear_console() -> str:
+    """Clear the console in the p5.js editor"""
+    try:
+        await send_to_webapp('clearConsole')
+        return "✅ Console cleared"
+    except Exception as e:
+        error_msg = f"❌ Failed to clear console: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+@mcp.tool()
+async def toggle_sidebar() -> str:
+    """Toggle the sidebar in the p5.js editor"""
+    try:
+        await send_to_webapp('toggleSidebar')
+        return "✅ Sidebar toggled"
+    except Exception as e:
+        error_msg = f"❌ Failed to toggle sidebar: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+@mcp.tool()
+async def update_project_name(name: str) -> str:
+    """Update the project name in the p5.js editor"""
+    try:
+        await send_to_webapp('updateProjectName', name)
+        return f"✅ Project name updated to '{name}'"
+    except Exception as e:
+        error_msg = f"❌ Failed to update project name: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+@mcp.tool()
+async def send_sample_code(sample_name: str) -> str:
+    """
+    Send a predefined sample code to the editor
+    
+    Args:
+        sample_name: Name of the sample ('basic_drawing', 'animated_background', 'interactive_particles', 'rotating_cube', 'generative_art')
+    """
+    if sample_name not in SAMPLE_CODES:
+        available = ', '.join(SAMPLE_CODES.keys())
+        return f"❌ Unknown sample. Available samples: {available}"
+    
+    code = SAMPLE_CODES[sample_name]
+    result = await send_code_to_editor(code)
+    return f"📝 Sent '{sample_name}' sample. {result}"
+
+@mcp.tool()
+async def get_connection_status() -> str:
+    """Get the current connection status and server information"""
+    client_count = get_connected_count()
+    if client_count > 0:
+        return f"✅ Socket.IO bridge server running with {client_count} connected webapp client(s). Ready to send commands!"
     else:
-        # For custom descriptions, we'll provide a basic template with comments
-        if custom_description:
-            return f"""// {custom_description}
-// TODO: Implement the specific functionality described above
+        return "❌ Socket.IO bridge server running but no webapp clients connected. Make sure the webapp is running and MCP is enabled."
 
-function setup() {{
-  createCanvas(400, 400);
-  // Initialize your variables and settings here
-}}
-
-function draw() {{
-  background(220);
-  // Add your drawing code here
-  // This function runs continuously in a loop
-}}
-
-// Add event handlers if needed:
-// function mousePressed() {{ }}
-// function keyPressed() {{ }}"""
+@mcp.tool()
+async def debug_connection_details() -> str:
+    """Get detailed debugging information about the connection state"""
+    client_count = get_connected_count()
+    
+    debug_info = []
+    debug_info.append(f"🔍 Debug Info:")
+    debug_info.append(f"   Bridge Server Running: {bridge_server_running}")
+    debug_info.append(f"   Connected Clients Count: {client_count}")
+    
+    with connection_lock:
+        if connected_clients:
+            debug_info.append(f"   Client IDs: {list(connected_clients)}")
         else:
-            return P5JS_TEMPLATES["basic"]
-
+            debug_info.append(f"   Client IDs: None")
+    
+    # Check if Socket.IO server is accessible
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get('http://localhost:3001/status') as response:
+                if response.status == 200:
+                    data = await response.json()
+                    debug_info.append(f"   HTTP Status Check: ✅ {data}")
+                else:
+                    debug_info.append(f"   HTTP Status Check: ❌ Status {response.status}")
+    except Exception as e:
+        debug_info.append(f"   HTTP Status Check: ❌ Error: {e}")
+    
+    return "\n".join(debug_info)
 
 @mcp.tool()
-def get_p5js_function_help(function_name: str) -> str:
-    """
-    Get help documentation for p5.js functions.
+async def test_webapp_ping() -> str:
+    """Test sending a simple ping to the webapp to verify connection"""
+    try:
+        client_count = get_connected_count()
+        if client_count == 0:
+            return "❌ No webapp clients connected to ping"
+        
+        # Send a test event
+        await sio.emit('ping', {'message': 'MCP server test ping', 'timestamp': asyncio.get_event_loop().time()})
+        logger.info(f'📤 Sent ping to {client_count} client(s)')
+        
+        return f"✅ Ping sent to {client_count} webapp client(s). Check webapp console for ping message."
+        
+    except Exception as e:
+        error_msg = f"❌ Failed to ping webapp: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+@mcp.tool()
+async def force_connection_refresh() -> str:
+    """Force refresh the connection state and try to reconnect"""
+    try:
+        client_count = get_connected_count()
+        
+        # Log current state
+        logger.info(f"🔄 Force refresh - Current clients: {client_count}")
+        
+        # Emit a status request to all clients to wake them up
+        if client_count > 0:
+            await sio.emit('getProjectState')
+            logger.info("📤 Sent getProjectState to wake up clients")
+        
+        # Wait a moment and check again
+        await asyncio.sleep(1)
+        new_count = get_connected_count()
+        
+        return f"🔄 Connection refresh complete. Clients before: {client_count}, after: {new_count}"
+        
+    except Exception as e:
+        error_msg = f"❌ Failed to refresh connection: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+@mcp.tool()
+async def check_server_health() -> str:
+    """Check the overall health of the bridge server"""
+    health_info = []
     
-    Args:
-        function_name: Name of the p5.js function to get help for
+    health_info.append("🏥 Server Health Check:")
+    health_info.append(f"   Bridge Server Running: {'✅' if bridge_server_running else '❌'}")
     
-    Returns:
-        Documentation for the function including syntax and examples
-    """
-    if function_name in P5JS_FUNCTIONS:
-        func_info = P5JS_FUNCTIONS[function_name]
-        return f"""Function: {function_name}
-
-Description: {func_info['description']}
-
-Syntax: {func_info['syntax']}
-
-Example: {func_info['example']}
-
-For more detailed documentation, visit: https://p5js.org/reference/#{function_name}"""
+    # Check if aiohttp runner is healthy
+    if runner:
+        health_info.append(f"   HTTP Runner: ✅ Active")
     else:
-        return f"""Function '{function_name}' not found in quick reference.
-
-Try these common p5.js functions:
-- createCanvas, background, fill, stroke, noFill, noStroke
-- ellipse, rect, line, point, triangle
-- translate, rotate, scale, push, pop
-- mouseX, mouseY, mousePressed, keyPressed
-- random, noise, map, constrain
-
-Visit https://p5js.org/reference/ for complete documentation."""
-
-
-@mcp.tool()
-def analyze_p5js_code(code: str) -> str:
-    """
-    Analyze p5.js code for common issues and provide suggestions.
+        health_info.append(f"   HTTP Runner: ❌ Not available")
     
-    Args:
-        code: The p5.js code to analyze
+    # Check Socket.IO server
+    try:
+        # Get Socket.IO manager info
+        manager = sio.manager
+        health_info.append(f"   Socket.IO Manager: ✅ Active")
+        health_info.append(f"   Socket.IO Rooms: {len(manager.rooms)}")
+    except Exception as e:
+        health_info.append(f"   Socket.IO Manager: ❌ Error: {e}")
     
-    Returns:
-        Analysis results and suggestions
-    """
-    issues = []
-    suggestions = []
+    # Check port binding
+    try:
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(('localhost', 3001))
+        sock.close()
+        if result == 0:
+            health_info.append(f"   Port 3001: ✅ Listening")
+        else:
+            health_info.append(f"   Port 3001: ❌ Not responding")
+    except Exception as e:
+        health_info.append(f"   Port 3001: ❌ Error: {e}")
     
-    # Check for common issues
-    if "setup()" not in code:
-        issues.append("Missing setup() function - required for p5.js sketches")
-    
-    if "draw()" not in code:
-        suggestions.append("Consider adding a draw() function for animation")
-    
-    if "createCanvas" not in code:
-        issues.append("Missing createCanvas() call - needed to create a drawing surface")
-    
-    if code.count("(") != code.count(")"):
-        issues.append("Mismatched parentheses - check your function calls")
-    
-    if code.count("{") != code.count("}"):
-        issues.append("Mismatched curly braces - check your code blocks")
-    
-    # Check for performance considerations
-    if "createCanvas" in code and "draw()" in code:
-        if code.count("createCanvas") > 1:
-            issues.append("createCanvas() should only be called once, typically in setup()")
-    
-    # Provide positive feedback
-    if "mouseX" in code or "mouseY" in code:
-        suggestions.append("Great! You're using mouse interaction")
-    
-    if "random(" in code:
-        suggestions.append("Nice use of randomness for creative effects")
-    
-    if "frameCount" in code:
-        suggestions.append("Using frameCount for animation - excellent!")
-    
-    # Format the response
-    result = "Code Analysis Results:\n\n"
-    
-    if issues:
-        result += "Issues Found:\n"
-        for i, issue in enumerate(issues, 1):
-            result += f"{i}. {issue}\n"
-        result += "\n"
-    
-    if suggestions:
-        result += "Suggestions:\n"
-        for i, suggestion in enumerate(suggestions, 1):
-            result += f"{i}. {suggestion}\n"
-        result += "\n"
-    
-    if not issues and not suggestions:
-        result += "Code looks good! No obvious issues found.\n\n"
-    
-    result += "For more help, visit: https://p5js.org/learn/"
-    
-    return result
-
+    return "\n".join(health_info)
 
 @mcp.tool()
-def create_p5js_project(name: str, template: str = "basic", description: str = "") -> str:
-    """
-    Create a new p5.js project structure.
-    
-    Args:
-        name: Name of the project
-        template: Template to use ('basic', 'animation', 'interactive', '3d', 'sound', 'generative')
-        description: Optional project description
-    
-    Returns:
-        JSON representation of the created project
-    """
-    # Generate the main sketch file
-    sketch_code = generate_p5js_code(template, description)
-    
-    # Create project structure
-    project = P5JSProject(
-        id=name.lower().replace(" ", "-"),
-        name=name,
-        description=description or f"p5.js project using {template} template",
-        files=[
-            P5JSProjectFile(
-                name="sketch.js",
-                content=sketch_code,
-                type="js"
-            ),
-            P5JSProjectFile(
-                name="index.html",
-                content=f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{name}</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
-</head>
-<body>
-    <main>
-        <h1>{name}</h1>
-        <p>{description or 'A p5.js creative coding project'}</p>
-    </main>
-    <script src="sketch.js"></script>
-</body>
-</html>""",
-                type="html"
-            )
-        ]
-    )
-    
-    return project.model_dump_json(indent=2)
-
-
-# Resources for p5.js documentation and examples
-@mcp.resource("p5js://reference/{function_name}")
-def get_p5js_reference(function_name: str) -> str:
-    """Get p5.js function reference documentation"""
-    return get_p5js_function_help(function_name)
-
-
-@mcp.resource("p5js://template/{template_name}")
-def get_p5js_template(template_name: str) -> str:
-    """Get p5.js code templates"""
-    if template_name in P5JS_TEMPLATES:
-        return P5JS_TEMPLATES[template_name]
-    else:
-        available = ", ".join(P5JS_TEMPLATES.keys())
-        return f"Template '{template_name}' not found. Available templates: {available}"
-
-
-@mcp.resource("p5js://examples")
-def get_p5js_examples() -> str:
-    """Get a list of available p5.js examples and templates"""
-    examples = {
-        "templates": list(P5JS_TEMPLATES.keys()),
-        "descriptions": {
-            "basic": "Simple mouse-following circle",
-            "animation": "Rotating square with HSB colors",
-            "interactive": "Particle system with mouse interaction",
-            "3d": "3D rotating shapes using WEBGL",
-            "sound": "Audio-reactive visualization",
-            "generative": "Generative art with randomness and noise"
+async def send_debug_message() -> str:
+    """Send a debug message to the webapp console"""
+    try:
+        debug_data = {
+            'type': 'info',
+            'message': f'🐛 Debug message from MCP server at {asyncio.get_event_loop().time()}',
+            'timestamp': asyncio.get_event_loop().time() * 1000
         }
-    }
-    return json.dumps(examples, indent=2)
+        
+        await send_to_webapp('addConsoleMessage', debug_data)
+        return "✅ Debug message sent to webapp console"
+        
+    except Exception as e:
+        error_msg = f"❌ Failed to send debug message: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
 
+@mcp.tool()
+async def get_socketio_internal_state() -> str:
+    """Get internal state directly from Socket.IO server"""
+    try:
+        state_info = []
+        state_info.append("🔍 Socket.IO Internal State:")
+        
+        if sio and hasattr(sio, 'manager'):
+            manager = sio.manager
+            state_info.append(f"   Manager exists: ✅")
+            
+            if hasattr(manager, 'eio'):
+                eio = manager.eio
+                state_info.append(f"   Engine.IO exists: ✅")
+                
+                if hasattr(eio, 'sockets'):
+                    socket_count = len(eio.sockets)
+                    state_info.append(f"   Engine.IO sockets: {socket_count}")
+                    if socket_count > 0:
+                        state_info.append(f"   Socket IDs: {list(eio.sockets.keys())}")
+                
+            if hasattr(manager, 'rooms'):
+                room_count = len(manager.rooms)
+                state_info.append(f"   Socket.IO rooms: {room_count}")
+                if room_count > 0:
+                    for room, sids in manager.rooms.items():
+                        state_info.append(f"     Room '{room}': {list(sids)}")
+            
+            # Get unique session IDs
+            all_sids = set()
+            if hasattr(manager, 'rooms'):
+                for room_sids in manager.rooms.values():
+                    all_sids.update(room_sids)
+            state_info.append(f"   Total unique sessions: {len(all_sids)}")
+            
+        else:
+            state_info.append("   Manager: ❌ Not found")
+        
+        return "\n".join(state_info)
+        
+    except Exception as e:
+        return f"❌ Error getting Socket.IO state: {e}"
 
+# Health check endpoint
+async def status_handler(request):
+    """Health check endpoint"""
+    client_count = get_connected_count()
+    return web.json_response({
+        "status": "running",
+        "connected_clients": client_count,
+        "message": "Socket.IO bridge server for p5.js MCP"
+    })
+
+# Add routes
+app.router.add_get("/status", status_handler)
+
+async def start_bridge_server():
+    """Start the Socket.IO bridge server"""
+    global bridge_server_running, runner
+    
+    if bridge_server_running:
+        return True
+    
+    try_ports = [3001, 3002, 3003, 3004]
+    
+    for port in try_ports:
+        try:
+            # Create and setup runner
+            runner = web.AppRunner(app)
+            await runner.setup()
+            
+            # Create site
+            site = web.TCPSite(runner, 'localhost', port)
+            await site.start()
+            
+            bridge_server_running = True
+            logger.info(f'🌉 Socket.IO bridge server running on port {port}')
+            if port != 3001:
+                logger.info(f'⚠️  Note: Using port {port} instead of 3001 (port conflict resolved)')
+            
+            return True
+            
+        except OSError as e:
+            if e.errno == 48:  # Address already in use
+                logger.warning(f'⚠️  Port {port} is in use, trying next port...')
+                if runner:
+                    await runner.cleanup()
+                    runner = None
+                continue
+            else:
+                raise
+        except Exception as e:
+            logger.error(f'❌ Server error on port {port}: {e}')
+            if runner:
+                await runner.cleanup()
+                runner = None
+            continue
+    
+    logger.error('❌ Could not start bridge server on any available port')
+    return False
+
+async def cleanup():
+    """Cleanup resources when shutting down"""
+    global runner, bridge_server_running
+    if runner:
+        await runner.cleanup()
+        bridge_server_running = False
+        logger.info("🔌 Socket.IO bridge server stopped")
+
+# Main execution
 if __name__ == "__main__":
-    # Run the server
-    mcp.run() 
+    import atexit
+    
+    # Register cleanup on exit
+    atexit.register(lambda: asyncio.run(cleanup()) if bridge_server_running else None)
+    
+    # Start the bridge server in a separate thread
+    def start_bridge_thread():
+        """Start the bridge server in a separate thread"""
+        async def run_bridge():
+            logger.info("🚀 Starting p5.js MCP Server with Socket.IO Bridge...")
+            success = await start_bridge_server()
+            
+            if not success:
+                logger.error("❌ Failed to start bridge server")
+                return
+            
+            logger.info("🌉 Socket.IO bridge server is running")
+            logger.info("💡 Make sure to enable MCP in your webapp to connect to the bridge server")
+            logger.info("🔗 Bridge server running on http://localhost:3001")
+            
+            # Keep the bridge server running
+            try:
+                while True:
+                    await asyncio.sleep(1)
+            except Exception as e:
+                logger.error(f"Bridge server error: {e}")
+                await cleanup()
+        
+        # Run the bridge server in its own event loop
+        asyncio.run(run_bridge())
+    
+    # Start bridge server in a daemon thread
+    bridge_thread = threading.Thread(target=start_bridge_thread, daemon=True)
+    bridge_thread.start()
+    
+    # Give the bridge server a moment to start
+    import time
+    time.sleep(2)
+    
+    logger.info("📡 Starting MCP server for Claude Desktop...")
+    
+    # Start the MCP server for Claude Desktop (this blocks)
+    mcp.run()
