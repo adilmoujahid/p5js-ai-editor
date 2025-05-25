@@ -32,6 +32,14 @@ A modern, web-based IDE for creating and editing p5.js sketches with AI assistan
 - **Remote UI control**: Control editor interface via WebSocket commands
 - Project state sharing capability
 
+### 🤖 **MCP Server Integration**
+- **Python MCP Server**: Dedicated server for p5.js AI assistance
+- **AI-Powered Tools**: Code generation, analysis, and documentation lookup
+- **Template Library**: 6 built-in p5.js templates (basic, animation, interactive, 3d, sound, generative)
+- **Function Documentation**: Interactive p5.js reference with examples
+- **Project Creation**: Generate complete project structures with HTML + JS files
+- **Code Analysis**: Automated issue detection and improvement suggestions
+
 ## Getting Started
 
 ### Prerequisites
@@ -58,15 +66,15 @@ A modern, web-based IDE for creating and editing p5.js sketches with AI assistan
    ```
 
 3. **Start the development server**
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   # or
-   pnpm dev
-   # or
-   bun dev
-   ```
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
 4. **Open the application**
    - Navigate to [http://localhost:3000](http://localhost:3000)
@@ -202,6 +210,153 @@ node test-websocket-server.js
 > projectname     # Rename project
 > dashboard       # Go to dashboard
 ```
+
+## MCP Server (AI Integration)
+
+The p5.js AI Editor includes a dedicated **Model Context Protocol (MCP) server** built with Python that provides AI tools with specialized p5.js knowledge and capabilities.
+
+### MCP Server Features
+
+The MCP server provides AI assistants with:
+
+#### 🛠️ **Tools**
+
+| Tool | Description | Usage |
+|------|-------------|-------|
+| `generate_p5js_code` | Generate p5.js code from templates or descriptions | Create new sketches with predefined patterns |
+| `get_p5js_function_help` | Get documentation for p5.js functions | Look up function syntax and examples |
+| `analyze_p5js_code` | Analyze code for issues and suggestions | Debug and improve existing code |
+| `create_p5js_project` | Create complete project structures | Generate full project with HTML + JS files |
+| **Webapp Control Tools** | | |
+| `send_code_to_webapp` | Send p5.js code to the webapp for execution | Control the editor remotely from Claude Desktop |
+| `control_webapp_execution` | Control code execution (start/stop/toggle) | Control sketch execution remotely |
+| `control_webapp_console` | Control console (clear/message/height) | Manage console output and display |
+| `control_webapp_files` | Control files (select/close/create/delete) | File management from Claude Desktop |
+| `control_webapp_layout` | Control UI layout (sidebar/project name/navigation) | Control webapp interface remotely |
+| `get_webapp_status` | Check webapp connection status | Verify connection and see available commands |
+
+#### 📚 **Knowledge Resources**
+- **Template Library**: 6 ready-to-use p5.js templates
+- **Function Reference**: Interactive p5.js documentation
+- **Examples Catalog**: Searchable collection of code patterns
+
+#### 🎨 **Available Templates**
+| Template | Description | Use Case |
+|----------|-------------|----------|
+| `basic` | Mouse-following circle | Getting started, simple interactions |
+| `animation` | Rotating HSB square | Learning animation and color |
+| `interactive` | Particle system | Mouse events and physics |
+| `3d` | WEBGL rotating shapes | 3D graphics and lighting |
+| `sound` | Audio-reactive visualization | Microphone input and audio |
+| `generative` | Randomness and noise art | Algorithmic and generative art |
+
+### Setting Up the MCP Server
+
+#### Prerequisites
+- Python 3.8+
+- [uv](https://docs.astral.sh/uv/) package manager
+
+#### Installation
+
+1. **Navigate to the MCP server directory**:
+   ```bash
+   cd p5js-mcp-server
+   ```
+
+2. **Dependencies are already installed** during setup:
+   ```bash
+   uv add "mcp[cli]"  # Already completed
+   ```
+
+#### Testing the MCP Server
+
+**Development Mode** (with interactive inspector):
+```bash
+cd p5js-mcp-server
+uv run mcp dev server.py
+```
+
+This opens the MCP Inspector where you can:
+- Test all available tools interactively
+- Browse resources and documentation
+- See real-time server logs and responses
+
+**Production Mode**:
+```bash
+cd p5js-mcp-server
+uv run python server.py
+```
+
+#### Integration with AI Tools
+
+To connect the MCP server to AI tools like Claude Desktop, add this configuration:
+
+```json
+{
+  "mcpServers": {
+    "p5js-ai-editor": {
+      "command": "uv",
+      "args": ["run", "python", "/path/to/p5js-ai-editor/p5js-mcp-server/server.py"],
+      "cwd": "/path/to/p5js-ai-editor/p5js-mcp-server"
+    }
+  }
+}
+```
+
+**💡 Troubleshooting**: If you get `ModuleNotFoundError: No module named 'mcp'`, use the direct Python path instead:
+
+```json
+{
+  "mcpServers": {
+    "p5js-ai-editor": {
+      "command": "/path/to/p5js-ai-editor/p5js-mcp-server/.venv/bin/python",
+      "args": ["/path/to/p5js-ai-editor/p5js-mcp-server/server.py"],
+      "cwd": "/path/to/p5js-ai-editor/p5js-mcp-server"
+    }
+  }
+}
+```
+
+#### Using Webapp Control Features
+
+To control your p5.js AI Editor webapp from Claude Desktop:
+
+1. **Start the webapp**: `npm run dev` (runs on localhost:3000)
+2. **Start the WebSocket test server**: `node test-websocket-server.js` (runs on localhost:3001)
+3. **Open a project** in the webapp and enable MCP connection
+4. **Use Claude Desktop** with commands like:
+   - "Send this code to my webapp: [p5.js code]"
+   - "Start execution in the webapp"
+   - "Clear the console in my editor"
+   - "Create a new file called 'particles.js'"
+   - "Check webapp connection status"
+
+### MCP Server API
+
+#### Tools Available to AI
+
+| Tool | Purpose | Example Usage |
+|------|---------|---------------|
+| `generate_p5js_code` | Create code from templates | "Generate an interactive particle system" |
+| `get_p5js_function_help` | Function documentation | "How do I use createCanvas?" |
+| `analyze_p5js_code` | Code review and debugging | "Check this code for issues" |
+| `create_p5js_project` | Full project generation | "Create a generative art project" |
+
+#### Resources Available to AI
+
+| Resource | URI Pattern | Description |
+|----------|-------------|-------------|
+| Function Reference | `p5js://reference/{function}` | Get docs for specific functions |
+| Code Templates | `p5js://template/{template}` | Access template code |
+| Examples Catalog | `p5js://examples` | List all available examples |
+
+### Example AI Interactions
+
+With the MCP server running, AI assistants can:
+
+```
+Human: "Create a spinning rainbow square"
+AI: [Uses generate_p5js_code tool with template="animation"]
 
 ## Project Structure
 

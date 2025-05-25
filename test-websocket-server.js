@@ -1,45 +1,91 @@
 const { Server } = require('socket.io');
 const readline = require('readline');
 
-// Create Socket.IO server
-const io = new Server(3001, {
-  cors: {
-    origin: "http://localhost:3000", // Next.js dev server
-    methods: ["GET", "POST"]
+// Try port 3001 first, then try alternatives
+const tryPorts = [3001, 3002, 3003, 3004];
+let currentPort = null;
+let io = null;
+
+// Function to try starting server on different ports
+function startServer() {
+  function tryPort(portIndex = 0) {
+    if (portIndex >= tryPorts.length) {
+      console.error('❌ Could not start server on any available port');
+      process.exit(1);
+    }
+
+    const port = tryPorts[portIndex];
+
+    try {
+      // Create Socket.IO server
+      io = new Server(port, {
+        cors: {
+          origin: "http://localhost:3000", // Next.js dev server
+          methods: ["GET", "POST"]
+        }
+      });
+
+      currentPort = port;
+      console.log(`🚀 Test WebSocket Server running on port ${port}`);
+      if (port !== 3001) {
+        console.log(`⚠️  Note: Using port ${port} instead of 3001 (port conflict resolved)`);
+        console.log(`💡 Update your webapp WebSocket connection to: ws://localhost:${port}`);
+      }
+      console.log('📝 Waiting for connections from p5.js AI Editor...\n');
+
+      // Set up the server event handlers
+      setupServerHandlers();
+
+    } catch (error) {
+      if (error.code === 'EADDRINUSE') {
+        console.log(`⚠️  Port ${port} is in use, trying next port...`);
+        tryPort(portIndex + 1);
+      } else {
+        console.error('❌ Server error:', error);
+        process.exit(1);
+      }
+    }
   }
-});
 
-console.log('🚀 Test WebSocket Server running on port 3001');
-console.log('📝 Waiting for connections from p5.js AI Editor...\n');
+  tryPort();
+}
 
-// Store connected clients
+// Set up server event handlers
+function setupServerHandlers() {
+  // Handle client connections
+  io.on('connection', (socket) => {
+    console.log(`✅ Client connected: ${socket.id}`);
+    clients.add(socket);
+
+    socket.on('disconnect', () => {
+      console.log(`❌ Client disconnected: ${socket.id}`);
+      clients.delete(socket);
+    });
+
+    // Listen for any messages from client (optional)
+    socket.onAny((eventName, ...args) => {
+      console.log(`📨 Received event: ${eventName}`, args);
+    });
+
+    // Listen for project state from client (for future MCP features)
+    socket.on('projectState', (data) => {
+      console.log('📥 Received project state:', data.projectName, `(${data.files.length} files)`);
+    });
+
+    // Request current project state
+    socket.on('getProjectState', () => {
+      console.log('📝 Client requesting project state...');
+    });
+  });
+
+  // Handle server errors
+  io.engine.on('connection_error', (err) => {
+    console.log('🔌 Connection error:', err.req, err.code, err.message, err.context);
+  });
+}
+
+// Store connected clients globally
 const clients = new Set();
-
-// Handle client connections
-io.on('connection', (socket) => {
-  console.log(`✅ Client connected: ${socket.id}`);
-  clients.add(socket);
-
-  socket.on('disconnect', () => {
-    console.log(`❌ Client disconnected: ${socket.id}`);
-    clients.delete(socket);
-  });
-
-  // Listen for any messages from client (optional)
-  socket.onAny((eventName, ...args) => {
-    console.log(`📨 Received event: ${eventName}`, args);
-  });
-
-  // Listen for project state from client (for future MCP features)
-  socket.on('projectState', (data) => {
-    console.log('📥 Received project state:', data.projectName, `(${data.files.length} files)`);
-  });
-
-  // Request current project state
-  socket.on('getProjectState', () => {
-    console.log('📝 Client requesting project state...');
-  });
-});
 
 // Create readline interface for interactive testing
 const rl = readline.createInterface({
@@ -216,7 +262,7 @@ function sendUICommand(event, data = null, description = '') {
 function showStatus() {
   console.log(`\n📊 Server Status:`);
   console.log(`   Connected clients: ${clients.size}`);
-  console.log(`   Server port: 3001`);
+  console.log(`   Server port: ${currentPort}`);
   console.log(`   CORS origin: http://localhost:3000`);
   console.log(`   Available samples: 1-6`);
   console.log(`   UI Control Commands: 15+ available\n`);
@@ -342,13 +388,19 @@ function handleInput(input) {
   showMenu();
 }
 
-// Start interactive mode
-showMenu();
-rl.on('line', handleInput);
-
 // Handle process termination
 process.on('SIGINT', () => {
   console.log('\n👋 Shutting down server...');
   rl.close();
+  if (io) {
+    io.close();
+  }
   process.exit(0);
 });
+
+// Start the server
+startServer();
+
+// Start interactive mode
+showMenu();
+rl.on('line', handleInput);
