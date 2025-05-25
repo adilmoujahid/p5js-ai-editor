@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "p5js-editor": {
+      "command": "node",
+      "args": [
+        "/Users/adil/Documents/01_projects/p5js-ai-editor/p5js-mcp-server-ts/dist/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
