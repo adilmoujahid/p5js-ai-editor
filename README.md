@@ -4,7 +4,7 @@ A modern, web-based IDE for creating and editing p5.js sketches with AI assistan
 
 <br>
 
-![Demo: Claude Desktop controlling the p5.js editor through natural language prompts via MCP server](ai-editor-mcp-server/AI-Editor-Claude-demo.gif)
+![Demo: Claude Desktop controlling the p5.js editor through natural language prompts via MCP server](AI-Editor-Claude-demo.gif)
 
 *Demo: Claude Desktop controlling the p5.js editor through natural language prompts via MCP server*
 
