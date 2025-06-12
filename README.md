@@ -2,6 +2,21 @@
 
 A modern, web-based IDE for creating and editing p5.js sketches with AI assistance and Model Context Protocol (MCP) integration for Claude Desktop.
 
+<br>
+
+<div style="display:block;margin:auto;height:75%;width:75%">
+  <video width="100%" height="auto" autoplay loop muted playsinline>
+    <source src="./ai-editor-mcp-server/AI-Editor-Claude-demo.mp4" type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+</div>
+
+<p style="text-align: center; font-style: italic; color: #666; margin-top: 10px; font-size: 0.9em;">
+  Demo: Claude Desktop controlling the p5.js editor through natural language prompts via MCP server
+</p>
+
+<br>
+
 ## Features
 
 ### 🎨 **Full-Featured p5.js Editor**
@@ -291,7 +306,7 @@ interface Project {
 
 ## License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is open source and available under the MIT License.
 
 ## Acknowledgments
 
