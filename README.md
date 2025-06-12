@@ -6,7 +6,7 @@ A modern, web-based IDE for creating and editing p5.js sketches with AI assistan
 
 <div style="display:block;margin:auto;height:75%;width:75%">
   <video width="100%" height="auto" autoplay loop muted playsinline>
-    <source src="ai-editor-mcp-server/AI-Editor-Claude-demo.mp4" type="video/mp4">
+    <source src="AI-Editor-Claude-demo.mp4" type="video/mp4">
     Your browser does not support the video tag.
   </video>
 </div>
